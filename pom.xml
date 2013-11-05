@@ -58,21 +58,6 @@
         <!--<version>4.1.9.Final</version>-->
         <!--</dependency>-->
         <!-- Aspectj -->
-        <dependency>
-            <groupId>org.aspectj</groupId>
-            <artifactId>aspectjrt</artifactId>
-            <version>1.6.11</version>
-        </dependency>
-        <dependency>
-            <groupId>org.aspectj</groupId>
-            <artifactId>aspectjtools</artifactId>
-            <version>1.6.11</version>
-        </dependency>
-        <dependency>
-            <groupId>org.aspectj</groupId>
-            <artifactId>aspectjweaver</artifactId>
-            <version>1.6.11</version>
-        </dependency>
 
         <!-- Logging -->
         <dependency>
