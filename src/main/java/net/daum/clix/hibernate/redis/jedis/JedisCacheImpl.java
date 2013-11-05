@@ -1,9 +1,15 @@
 package net.daum.clix.hibernate.redis.jedis;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.util.ISO8601DateFormat;
+import com.fasterxml.jackson.module.afterburner.AfterburnerModule;
+import java.io.IOException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import net.daum.clix.hibernate.redis.RedisCache;
 import org.hibernate.cache.CacheException;
-import org.springframework.core.serializer.support.DeserializingConverter;
-import org.springframework.core.serializer.support.SerializingConverter;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 
@@ -20,6 +26,14 @@ public class JedisCacheImpl implements RedisCache {
     private String regionName;
     private boolean locked = false;
 
+    public static final ObjectMapper mapper = new ObjectMapper();
+
+    static {
+        mapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
+        mapper.setDateFormat(new ISO8601DateFormat());
+        mapper.registerModule(new AfterburnerModule());
+    }
+
     public JedisCacheImpl(JedisPool jedisPool, String regionName) {
         this.jedisPool = jedisPool;
         this.regionName = regionName;
@@ -28,33 +42,50 @@ public class JedisCacheImpl implements RedisCache {
 
     @Override
     public Object get(Object key) throws CacheException {
-        Object o = null;
+        try {
+            Object o = null;
 
-        byte[] k = serializeObject(key.toString());
-        byte[] v = jedis.get(k);
-        if (v != null && v.length > 0) {
-            o = deserializeObject(v);
+            byte[] k = serializeObject(key.toString());
+            byte[] v = jedis.get(k);
+            if (v != null && v.length > 0) {
+                o = deserializeObject(v);
+            }
+
+            return o;
+        } catch (IOException ex) {
+            throw new CacheException(ex);
         }
-
-        return o;
     }
 
     @Override
     public void put(Object key, Object value) throws CacheException {
-        byte[] k = serializeObject(key.toString());
-        byte[] v = serializeObject(value);
-
-        jedis.set(k, v);
+        try {
+            byte[] k = serializeObject(key.toString());
+            byte[] v = serializeObject(value);
+            
+            jedis.set(k, v);
+        } catch (IOException ex) {
+            throw new CacheException(ex);
+        }
     }
 
     @Override
     public void remove(Object key) throws CacheException {
-        jedis.del(serializeObject(key.toString()));
+        try {
+            jedis.del(serializeObject(key.toString()));
+        } catch (JsonProcessingException ex) {
+            throw new CacheException(ex);
+        }
     }
 
     @Override
     public boolean exists(String key) {
-        return jedis.exists(serializeObject(key.toString()));
+        try {
+            return jedis.exists(serializeObject(key.toString()));
+        } catch (JsonProcessingException ex) {
+            Logger.getLogger(JedisCacheImpl.class.getName()).log(Level.SEVERE, null, ex);
+            return false;
+        }
     }
 
     @Override
@@ -87,14 +118,12 @@ public class JedisCacheImpl implements RedisCache {
         jedisPool.returnResource(jedis);
     }
 
-    private byte[] serializeObject(Object obj) {
-        SerializingConverter sc = new SerializingConverter();
-        return sc.convert(obj);
+    private byte[] serializeObject(Object obj) throws JsonProcessingException {
+        return mapper.writeValueAsBytes(obj);
     }
 
-    private Object deserializeObject(byte[] b) {
-        DeserializingConverter dc = new DeserializingConverter();
-        return dc.convert(b);
+    private Object deserializeObject(byte[] b) throws IOException {
+        return mapper.readValue(b, Object.class);
     }
 
     public boolean lock(Object key, Long expireMsecs) throws InterruptedException {
@@ -144,6 +173,5 @@ public class JedisCacheImpl implements RedisCache {
 
         return key.toString() + ".lock";
     }
-
 
 }
